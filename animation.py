@@ -130,7 +130,7 @@ def init():
     global human_model
 
     human_model = ColladaModel("resources/Ch07_nonPBR/Ch07_nonPBR.dae", args.sequence_index)
-    # human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD0.dae", args.sequence_index)
+    # human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD0.dae", args.sequence_index, armature_keywords="Humano_Rig_052-6525_01_T-LOD0-Skel_")
     # human_model = ColladaModel("resources/Louise/louise1.dae")
     # human_model = ColladaModel("resources/ramy_changed/ramy.dae")
     # human_model = ColladaModel("resources/Reaction/Reaction.dae")
