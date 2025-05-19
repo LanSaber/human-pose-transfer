@@ -20,6 +20,8 @@ uniform mat4 model;
 uniform mat4 view;
 uniform mat4 projection;
 
+uniform bool use_bumpmap = true;
+
 uniform mat4 jointTransforms[MAX_JOINTS];
 
 void main()
@@ -56,9 +58,12 @@ void main()
     fragPos = vec3(model * totalLocalPos);
 
 	// Calculate the normal in world space
-	//	mat3 normalMatrix = mat3(transpose(inverse(model)));
-	//	fragNormal = vec3(normalize(normalMatrix * vec3(totalMicroNorm))); // Transform and normalize the normal
-
+	//  mat3 normalMatrix = mat3(transpose(inverse(model)));
+	//  fragNormal = vec3(normalize(normalMatrix * vec3(totalMicroNorm))); // Transform and normalize the normal
+    // normal vector in world space
+    if(!use_bumpmap){
+        fragNormal = vec3(totalNormal);
+    }
 	// calculate TBN
 	vec3 T = normalize(vec3(model * totalTangent));
 	vec3 B = normalize(vec3(model * totalBitangent));

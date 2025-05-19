@@ -80,10 +80,6 @@ joint_name = [
 ]
 
 joint_map = {
-"Humano_Hip": "pelvis",
-"Humano_Pelvis": "spine1",
-'Humano_Spine01': "spine1",
-'Humano_Spine02': "spine2",
 'Humano_L_Clavicle': "left_collar",
 'Humano_L_Upperarm': "left_shoulder",
 'Humano_L_Forearm': "left_elbow",
@@ -92,8 +88,8 @@ joint_map = {
 'Humano_L_Mid2': "left_middle2",
 'Humano_L_Mid3': "left_middle3",
 'Humano_L_Index1': "left_index1",
-'Humano_L_Index2': "left_index2",
-'Humano_L_Index3': "left_index3",
+# 'Humano_L_Index2': "left_index2",
+# 'Humano_L_Index3': "left_index3",
 'Humano_L_Ring1': "left_ring1",
 'Humano_L_Ring2': "left_ring2",
 'Humano_L_Ring3': "left_ring3",

@@ -13,16 +13,20 @@ uniform sampler2D normalMap;
 uniform vec3 lightPos;
 uniform vec3 viewPos;
 
+uniform bool use_bumpmap = true;
+
 void main()
 {
 
     // Normalize the normal
-    // vec3 norm = normalize(fragNormal);
+    vec3 norm = normalize(fragNormal);
 
     // Sample the normal map
-    vec3 norm = texture(normalMap, TexCoord).rgb;
-    norm = norm * 2.0 - 1.0;  // Convert to [-1, 1] range
-    norm = normalize(TBN*norm);
+    if(use_bumpmap){
+        norm = texture(normalMap, TexCoord).rgb;
+        norm = norm * 2.0 - 1.0;  // Convert to [-1, 1] range
+        norm = normalize(TBN*norm);
+    }
 
     // Compute light direction
     vec3 lightDir = normalize(lightPos - fragPos);
@@ -44,7 +48,7 @@ void main()
 
 	// vec3 ambient = 0.1 * DiffuseColor
 	FragColor = vec4(result, 1.0);
-
+    // FragColor = vec4(texture(diffuseMap, TexCoord).rgb, 1.0f);
 
 	//FragColor = vec4(0,0.2,0.3,0);
 }

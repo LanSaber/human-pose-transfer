@@ -10,6 +10,7 @@ from ctypes import c_float, c_void_p, sizeof
 import numpy as np
 from collada.polylist import Polylist
 from collada.scene import ControllerNode
+from collada.material import Material
 
 from .transformations import quaternion_from_matrix, quaternion_matrix, quaternion_slerp, rotation_matrix
 
@@ -19,6 +20,7 @@ class Joint:
         self.id = id
         self.children = []
         self.parent = None
+        # world2bone transform
         self.inverse_transform_matrix = inverse_transform_matrix
 
 
@@ -34,9 +36,9 @@ class KeyFrame:
             translation_matrix[0, 3], translation_matrix[1, 3], translation_matrix[2, 3] = value[0, 3], value[1, 3], \
                                                                                            value[2, 3]
 
-            rotation_matrix = quaternion_from_matrix(value)
+            rotation_quaternion = quaternion_from_matrix(value)
 
-            self.joint_transform[key] = [translation_matrix, rotation_matrix]
+            self.joint_transform[key] = [translation_matrix, rotation_quaternion]
 
 
 class ColladaModel:
@@ -48,9 +50,11 @@ class ColladaModel:
         self.normal = []
         self.specular = []
         self.armature_keywords = armature_keywords
+        self.use_bumpmap = True
         if "Humano_Rig" in collada_file_path:
             self.__load_human(model)
-        if not collada_file_path.endswith("human.dae"):
+            self.use_bumpmap = False
+        elif not collada_file_path.endswith("human.dae"):
             self.inverse_transform_matrices = []
             self.joints_order = {}
             self.joints_matrix_map = {}
@@ -165,8 +169,8 @@ class ColladaModel:
 
         # self.__load_keyframes(model.animations, collada_file_path)
         # self.__load_keyframes_from_smplx("/home/hhm/pose_process/data_vis/2")
-        # if  sequence_index>=0:
-        #     self.__load_keyframes_from_dataset("pose_data/processed_quart_val.pkl", sequence_index)
+        if sequence_index >= 0:
+            self.__load_keyframes_from_dataset("pose_data/processed_quart_val.pkl", sequence_index)
 
         self.doing_animation = False
         self.frame_start_time = None
@@ -198,23 +202,62 @@ class ColladaModel:
                     self.joints_matrix_map[joint_name] = controller_joint_matrices[index]
                 elif np.not_equal(self.joints_matrix_map[joint_name], controller_joint_matrices[index]).any():
                     print("Oh, no!!!!!")
-                if self.joints_order.get(self.armature_keywords + joint_name) is None:
+                if self.joints_order.get(joint_name) is None:
                     self.inverse_transform_matrices.append(controller_joint_matrices[index])
-                    self.joints_order[self.armature_keywords + joint_name] = len(self.inverse_transform_matrices) - 1
+                    self.joints_order[joint_name] = len(self.inverse_transform_matrices) - 1
         for node in model.scenes[0].nodes:
             if node.id == 'Humano_Rig_052-6525_01_T-LOD0-Skel':
                 node = node.children[0].children[0]
                 self.root_joint = Joint(node.id.replace(self.armature_keywords, "", 1),
-                                        self.inverse_transform_matrices[self.joints_order.get(node.id)])
+                                        self.inverse_transform_matrices[self.joints_order.get(node.id.replace(self.armature_keywords, "", 1))])
                 self.root_joint.children.extend(self.__load_armature(node))
+                self.__process_non_controlled_joints(self.root_joint)
                 self.rest_pose_joint_animation_matrix = {}
-                self.__calculate_rest_pose_animation_matrix(self.root_joint, np.identity(4))
+                # self.__calculate_rest_pose_animation_matrix(self.root_joint, np.linalg.inv(self.root_joint.inverse_transform_matrix))
+                self.__calculate_rest_pose_animation_matrix(self.root_joint,
+                                                            np.identity(4))
                 self.joint_dict = {}
                 self.__construct_joint_dict(self.root_joint, None)
+        M1 = self.rest_pose_joint_animation_matrix[self.root_joint.id]@self.root_joint.inverse_transform_matrix
         control_node = model.controllers[0]
-        materials= model.materials
+        materials = model.materials
         self.__load_mesh_data_from_skin_and_material(control_node, materials)
-        dwae = 0
+        finish = 1
+
+    def __process_non_controlled_joints(self, joint):
+        for child in joint.children:
+            child.parent = joint
+        if self.joints_order.get(joint.id) is None:
+            if joint.id == 'Humano_Pelvis':
+                joint.inverse_transform_matrix = joint.parent.inverse_transform_matrix
+                self.joints_matrix_map[joint.id] = self.joints_matrix_map[joint.parent.id]
+                self.joints_order[joint.id] = self.joints_order[joint.parent.id]
+            elif joint.id == "Humano_L_Upperarm" or joint.id == "Humano_L_Forearm" or joint.id == "Humano_R_Forearm" or joint.id == "Humano_R_Upperarm":
+                print(joint.id)
+                for child in joint.children:
+                    child.parent = joint
+                    if self.joints_order.get(child.id) is not None and joint.id in child.id:
+                        joint.inverse_transform_matrix = child.inverse_transform_matrix
+                        self.joints_matrix_map[joint.id] = self.joints_matrix_map[child.id]
+                        # self.joints_matrix_map.pop(child.id)
+                        self.joints_order[joint.id] = self.joints_order[child.id]
+                        # self.joints_order.pop(child.id)
+                        joint.children.remove(child)
+            elif joint.id == "Humano_L_Thigh" or joint.id =="Humano_L_Calf" or joint.id == "Humano_R_Thigh" or joint.id =="Humano_R_Calf":
+                print(joint.id)
+                for child in joint.children:
+                    child.parent = joint
+                    if self.joints_order.get(child.id) is not None and joint.id in child.id:
+                        joint.inverse_transform_matrix = child.inverse_transform_matrix
+                        self.joints_matrix_map[joint.id] = self.joints_matrix_map[child.id]
+                        # self.joints_matrix_map.pop(child.id)
+                        self.joints_order[joint.id] = self.joints_order[child.id]
+                        # self.joints_order.pop(child.id)
+                        joint.children.remove(child)
+        for child in joint.children:
+            self.__process_non_controlled_joints(child)
+
+
 
 
     def __load_pose_from_pkl(self, file_name):
@@ -259,8 +302,7 @@ class ColladaModel:
             smplx_initial_rot_matrix = Rotation.from_euler("xyz", smplx_euler, degrees=True).as_matrix()
 
         joint_matrix = self.joints_matrix_map.get(mixamo_joint_name)
-        if joint_matrix is None:
-            joint_matrix = np.identity(4)
+
         mixamo_rot = np.linalg.inv(joint_matrix[:3,:3])
         smpl2mixamo_rot = np.matmul(np.linalg.inv(mixamo_rot), smpl_rot)
         matrix_ = np.matmul(smplx_initial_rot_matrix, matrix_)
@@ -290,6 +332,7 @@ class ColladaModel:
         if joint_matrix is None:
             joint_matrix = np.identity(4)
         animation_matrix =  np.matmul(np.linalg.inv(parent_matrix), np.linalg.inv(joint_matrix))
+
         self.rest_pose_joint_animation_matrix[joint.id.replace(self.armature_keywords, "", 1)] = animation_matrix
         parent_matrix = np.matmul(parent_matrix, animation_matrix)
         for child in joint.children:
@@ -374,15 +417,15 @@ class ColladaModel:
         if type(node) == collada.scene.Node:
             for child in node.children:
                 if type(child) == collada.scene.Node:
-                    if self.joints_order.get(child.id)!=None:
-                        joint = Joint(child.id, self.inverse_transform_matrices[self.joints_order.get(child.id)])
+                    if self.joints_order.get(child.id.replace(self.armature_keywords, "", 1))!=None:
+                        joint = Joint(child.id.replace(self.armature_keywords, "", 1), self.inverse_transform_matrices[self.joints_order.get(child.id.replace(self.armature_keywords, "", 1))])
                         joint.children.extend(self.__load_armature(child))
                         children.append(joint)
                     else:
-                        joint = Joint(child.id)
+                        joint = Joint(child.id.replace(self.armature_keywords, "", 1))
                         joint.children.extend(self.__load_armature(child))
                         children.append(joint)
-                        print("Cannot find mapped skeleton")
+                        print(f"Cannot find mapped skeleton:{child.id}")
         return children
 
     # 法线贴图TBN矩阵
@@ -427,13 +470,17 @@ class ColladaModel:
             self.ntriangles.append(len(mesh_data))
             try:
                 material = materials[index]
-                diffuse = material.target.effect.diffuse
+                if isinstance(material, Material):
+                    effect = material.effect
+                else:
+                    effect = material.target.effect
+                diffuse = effect.diffuse
                 specular = None
-                if type(material.target.effect.specular) is collada.material.Map:
-                    specular = material.target.effect.specular
+                if type(effect.specular) is collada.material.Map:
+                    specular = effect.specular
                 normal = None
-                if type(material.target.effect.bumpmap) is collada.material.Map:
-                    normal = material.target.effect.bumpmap
+                if type(effect.bumpmap) is collada.material.Map:
+                    normal = effect.bumpmap
                 texture_type = "v_color" if type(diffuse) == tuple else "sampler"
             except:
                 texture_type = None
@@ -464,14 +511,16 @@ class ColladaModel:
                     n = mesh_data.normal[mesh_data.normal_index[i]]
                     if texture_type == "sampler":
                         t = mesh_data.texcoordset[0][mesh_data.texcoord_indexset[0][i]]
+                        tangent, bitangent = self.__calculate__trangent(v, t)
+                        tangent_ = [tangent for vertex in v]
+                        bitangent_ = [bitangent for vertex in v]
                     elif texture_type == "v_color":
                         t = np.array(diffuse[:-1]).reshape([1, -1]).repeat([3], axis=0)
-                    dwae = skin.joint_index[mesh_data.vertex_index[i, 0]]
                     joint_name_array = [weights_joint[skin.joint_index[mesh_data.vertex_index[i, j]]] for j
                                         in range(3)]
                     j_index_ = []
                     for j in range(3):
-                        j_index_.append(np.array([self.joints_order[self.armature_keywords + joint_name] for joint_name in joint_name_array[j]]))
+                        j_index_.append(np.array([self.joints_order[joint_name] for joint_name in joint_name_array[j]]))
                     # j_index_ = [node.controller.joint_index[mesh_data.vertex_index[i, 0]],
                     #             node.controller.joint_index[mesh_data.vertex_index[i, 1]],
                     #             node.controller.joint_index[mesh_data.vertex_index[i, 2]]]
@@ -603,7 +652,7 @@ class ColladaModel:
                 glActiveTexture(GL_TEXTURE0 + count)
                 glBindTexture(GL_TEXTURE_2D, self.normal[index])
                 count += 1
-            if self.normal[index] != -1:
+            if self.specular[index] != -1:
                 glUniform1i(glGetUniformLocation(shader_program.id, "specularMap"), count)
                 glActiveTexture(GL_TEXTURE0 + count)
                 glBindTexture(GL_TEXTURE_2D, self.specular[index])
@@ -668,6 +717,16 @@ class ColladaModel:
         #         self.interpolation_joint[key] = matrix
 
         self.load_animation_matrices(self.root_joint, np.identity(4))
+        # Deal with the brach of the skeleton tree
+        if "Humano" in self.armature_keywords:
+            self.render_static_matrices[21] = self.render_static_matrices[20]@np.linalg.inv(
+                self.inverse_transform_matrices[20])@self.inverse_transform_matrices[21]
+            self.render_static_matrices[24] = self.render_static_matrices[23] @ np.linalg.inv(
+                self.inverse_transform_matrices[23]) @ self.inverse_transform_matrices[24]
+            self.render_static_matrices[27] = self.render_static_matrices[26] @ np.linalg.inv(
+                self.inverse_transform_matrices[26]) @ self.inverse_transform_matrices[27]
+            self.render_static_matrices[29] = self.render_static_matrices[28] @ np.linalg.inv(
+                self.inverse_transform_matrices[28]) @ self.inverse_transform_matrices[29]
         self.render(shader_program)
 
     def interpolating_translation(self, translation_a, translation_b, progress):
@@ -681,16 +740,11 @@ class ColladaModel:
         return quaternion_matrix(quaternion_slerp(rotation_a, rotation_b, progress))
 
     def load_animation_matrices(self, joint, parent_matrix):
-        if self.interpolation_joint.get(joint.id + "_pose_matrix") is None:
-            if self.interpolation_joint.get(joint.id.replace(self.armature_keywords, "", 1)) is None:
-                p = np.matmul(parent_matrix, self.rest_pose_joint_animation_matrix[joint.id.replace(self.armature_keywords, "", 1)])
-                # p = np.matmul(parent_matrix, np.identity(4))
-            else:
-                p = np.matmul(parent_matrix, self.interpolation_joint.get(joint.id.replace(self.armature_keywords, "", 1)))
+        if self.interpolation_joint.get(joint.id.replace(self.armature_keywords, "", 1)) is None:
+            p = np.matmul(parent_matrix, self.rest_pose_joint_animation_matrix[joint.id.replace(self.armature_keywords, "", 1)])
+            # p = np.matmul(parent_matrix, np.identity(4))
         else:
-            p = np.matmul(parent_matrix, self.interpolation_joint.get(joint.id + "_pose_matrix"))
-        for child in joint.children:
-            self.load_animation_matrices(child, p)
+            p = np.matmul(parent_matrix, self.interpolation_joint.get(joint.id.replace(self.armature_keywords, "", 1)))
         matrix_ret = np.matmul(p, joint.inverse_transform_matrix)
         # if joint.id == "mixamorig_LeftLeg":
         #     from scipy.spatial.transform import Rotation
@@ -698,7 +752,12 @@ class ColladaModel:
         #     trans_matrix = np.identity(4)
         #     trans_matrix[:3, :3] = rot_matrix
         #     matrix_ret = np.matmul(trans_matrix, matrix_ret)
-        self.render_static_matrices[self.joints_order.get(joint.id.replace(self.armature_keywords, "", 1))] = matrix_ret
+        if self.joints_order.get(joint.id.replace(self.armature_keywords, "", 1)) is not None:
+            self.render_static_matrices[self.joints_order.get(joint.id.replace(self.armature_keywords, "", 1))] = matrix_ret
+            # self.render_static_matrices[
+            #     self.joints_order.get(joint.id.replace(self.armature_keywords, "", 1))] = np.identity(4)
+        for child in joint.children:
+            self.load_animation_matrices(child, p)
 
     def load_keyframes_from_dict(self, pose_dict_list, frame_rate = 1/18):
         for i, pose_dict in enumerate(pose_dict_list):

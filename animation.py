@@ -35,6 +35,11 @@ if not ego_centric:
     projection = glm.perspective(glm.radians(30.0), SCR_WIDTH * 1.0 / SCR_HEIGHT, 0.1, 1000)
     # Lighting and camera position
     light_pos = np.array([0, 100.0, 200.0], dtype=np.float32)
+
+    # camera = Camera3D(glm.vec3(0.0, -5.0, 3.0))
+    # projection = glm.perspective(glm.radians(30.0), SCR_WIDTH * 1.0 / SCR_HEIGHT, 0.1, 1000)
+    # # Lighting and camera position
+    # light_pos = np.array([0, 100.0, 200.0], dtype=np.float32)
 else:
     camera = Camera3D(glm.vec3(0.0, 160, 20), front=(0.0, 0.0, 1.0), yaw=90, pitch=-45)
     projection = glm.perspective(glm.radians(120.0), SCR_WIDTH * 1.0 / SCR_HEIGHT, 0.1, 1000)
@@ -129,8 +134,11 @@ def init():
 
     global human_model
 
-    human_model = ColladaModel("resources/Ch07_nonPBR/Ch07_nonPBR.dae", args.sequence_index)
-    # human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD0.dae", args.sequence_index, armature_keywords="Humano_Rig_052-6525_01_T-LOD0-Skel_")
+    # human_model = ColladaModel("resources/Ch07_nonPBR/Ch07_nonPBR.dae", args.sequence_index)
+
+    human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD1.dae", args.sequence_index, armature_keywords="Humano_Rig_052-6525_01_T-LOD0-Skel_")
+    # human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD1.dae", args.sequence_index,
+    #                              armature_keywords="Humano_Rig_052-6525_01_T-LOD0-Skel_")
     # human_model = ColladaModel("resources/Louise/louise1.dae")
     # human_model = ColladaModel("resources/ramy_changed/ramy.dae")
     # human_model = ColladaModel("resources/Reaction/Reaction.dae")
@@ -183,8 +191,16 @@ def drawFunc():
 
     robot_program.use()
     robot_program.set_matrix("projection", glm.value_ptr(projection))
+    if "Humano" in human_model.armature_keywords:
+        view = glm.lookAt(glm.vec3(0.0, -3.0, 3.0), glm.vec3(0.0, 1.0, 0.0), glm.vec3(0.0, 1.0, 0.0))
+        light_pos = np.array([0, -100.0, 200.0], dtype=np.float32)
+        glUniformMatrix4fv(glGetUniformLocation(robot_program.id, "view"), 1, GL_FALSE, glm.value_ptr(view))
+    else:
+        light_pos = np.array([0, 100.0, 200.0], dtype=np.float32)
     # Pass view_position (vec3) to the shader instead of the entire matrix
     glUniform3fv(glGetUniformLocation(robot_program.id, "viewPos"), 1, glm.value_ptr(viewPos))
+
+    glUniform1i(glGetUniformLocation(robot_program.id, "use_bumpmap"), human_model.use_bumpmap)
 
 
     glUniform3fv(glGetUniformLocation(robot_program.id, "lightPos"), 1, light_pos)
@@ -194,7 +210,8 @@ def drawFunc():
 
 
     m = glm.mat4(1.0)
-    # m = glm.rotate(m, glm.radians(-90), glm.vec3(1, 0, 0))
+
+    # m = glm.rotate(m, glm.radians(90), glm.vec3(1, 0, 0))
     robot_program.set_matrix("model", glm.value_ptr(m))
 
     # # Define the light properties
@@ -453,6 +470,8 @@ def __drawFunc(frame_index = 0, image_list = []):
     # Pass view_position (vec3) to the shader instead of the entire matrix
     glUniform3fv(glGetUniformLocation(robot_program.id, "viewPos"), 1, glm.value_ptr(viewPos))
 
+    glUniform1i(glGetUniformLocation(robot_program.id, "use_bumpmap"), human_model.use_bumpmap)
+
     glUniform3fv(glGetUniformLocation(robot_program.id, "lightPos"), 1, light_pos)
     glUniformMatrix4fv(glGetUniformLocation(robot_program.id, "view"), 1, GL_FALSE, glm.value_ptr(view))
 
@@ -462,6 +481,12 @@ def __drawFunc(frame_index = 0, image_list = []):
     m = glm.mat4(1.0)
     # m = glm.rotate(m, glm.radians(-90), glm.vec3(1, 0, 0))
     robot_program.set_matrix("model", glm.value_ptr(m))
+    if "Humano" in human_model.armature_keywords:
+        view = glm.lookAt(glm.vec3(0.0, -3.0, 3.0), glm.vec3(0.0, 1.0, 0.0), glm.vec3(0.0, 1.0, 0.0))
+        light_pos = np.array([0, -100.0, 200.0], dtype=np.float32)
+        glUniformMatrix4fv(glGetUniformLocation(robot_program.id, "view"), 1, GL_FALSE, glm.value_ptr(view))
+    else:
+        light_pos = np.array([0, 100.0, 200.0], dtype=np.float32)
 
     # # Define the light properties
     # light_direction = np.array([0.0, -1.0, -1.0], dtype=np.float32)  # Direction of light
