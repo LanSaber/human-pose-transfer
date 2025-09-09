@@ -341,6 +341,7 @@ class ColladaModel:
     def __load_keyframes_from_dataset(self, file, index, frame_rate = 1/18):
         with open(file, 'rb') as f:
             import pickle
+            # pose_dict_list0 = pickle.load(f)
             pose_dict_list = pickle.load(f)[index]["poses"]
         self.load_keyframes_from_dict(pose_dict_list, frame_rate)
 
@@ -680,8 +681,8 @@ class ColladaModel:
             self.doing_animation = True
             self.frame_start_time = glutGet(GLUT_ELAPSED_TIME)
         self.interpolation_joint = dict()
-        # if len(self.keyframes)>0 and self.animation_keyframe_pointer<len(self.keyframes) - 2:
-        if len(self.keyframes) > 0:
+        if len(self.keyframes)>0 and self.animation_keyframe_pointer<=len(self.keyframes) - 2:
+        # if len(self.keyframes) > 0 and self.animation_keyframe_pointer:
             pre_frame, next_frame = self.keyframes[self.animation_keyframe_pointer:self.animation_keyframe_pointer + 2]
             frame_duration_time = (next_frame.time - pre_frame.time) * 1000
             current_frame_time = glutGet(GLUT_ELAPSED_TIME)

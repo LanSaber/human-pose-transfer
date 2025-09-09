@@ -14,6 +14,8 @@ from keyboard import keys_down, keys_up
 from collada_loader.model_loader import ColladaModel
 import argparse
 
+import cv2
+
 parser = argparse.ArgumentParser()
 
 # Define expected arguments
@@ -134,11 +136,10 @@ def init():
 
     global human_model
 
-    # human_model = ColladaModel("resources/Ch07_nonPBR/Ch07_nonPBR.dae", args.sequence_index)
+    human_model = ColladaModel("resources/Ch07_nonPBR/Ch07_nonPBR.dae", args.sequence_index)
 
-    human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD1.dae", args.sequence_index, armature_keywords="Humano_Rig_052-6525_01_T-LOD0-Skel_")
-    # human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD1.dae", args.sequence_index,
-    #                              armature_keywords="Humano_Rig_052-6525_01_T-LOD0-Skel_")
+    # human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD1.dae", args.sequence_index, armature_keywords="Humano_Rig_052-6525_01_T-LOD0-Skel_")
+    # human_model = ColladaModel("resources/woman/Humano_Rig_052-6525_01_T-LOD1.dae", args.sequence_index, armature_keywords="Humano_Rig_052-6525_01_T-LOD0-Skel_")
     # human_model = ColladaModel("resources/Louise/louise1.dae")
     # human_model = ColladaModel("resources/ramy_changed/ramy.dae")
     # human_model = ColladaModel("resources/Reaction/Reaction.dae")
@@ -188,6 +189,7 @@ def drawFunc():
     # glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
     shader_program.un_use()
     glEnable(GL_DEPTH_TEST)
+    glEnable(GL_MULTISAMPLE)
 
     robot_program.use()
     robot_program.set_matrix("projection", glm.value_ptr(projection))
@@ -364,7 +366,7 @@ def load_texture_img(image_path):
 
     glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, background_image.width, background_image.height, 0, GL_RGB, GL_UNSIGNED_BYTE, background_image_data)
 
-def play_pose_parameters(pose_dict, output_dir = "file"):
+def play_pose_parameters(pose_dict, output_dir = "file", file_name = "file"):
     human_model.keyframes.clear()
     human_model.load_keyframes_from_dict(pose_dict)
     image_list = []
@@ -372,8 +374,51 @@ def play_pose_parameters(pose_dict, output_dir = "file"):
         __drawFunc(i, image_list)
     if not os.path.exists(os.path.join("render_result", output_dir)):
         os.mkdir(os.path.join("render_result", output_dir))
+
+    video_path = os.path.join("render_result", output_dir, f"{file_name}.mp4")
+    # Get dimensions of the images
+    # Convert the first image to a numpy array to get its shape
+    first_image_array = np.array(image_list[0])
+    height, width, layers = first_image_array.shape
+    video_writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), 30, (width, height))
     for frame_idx, img in enumerate(image_list):
-        img.save(os.path.join("render_result", output_dir, str(frame_idx) + ".png"))
+        # img.save(os.path.join("render_result", output_dir, str(frame_idx) + ".png"))
+        img = np.array(img)
+        video_writer.write(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    video_writer.release()
+
+def save_qe_frames(pose_dict):
+    human_model.keyframes.clear()
+    human_model.load_keyframes_from_dict(pose_dict)
+    image_list = []
+    for i in range(len(human_model.keyframes)):
+        __drawFunc(i, image_list)
+    return image_list
+        
+def save_images_to_video(image_list, output_dir="output", file_name="output_video"):
+    import cv2
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Convert images to numpy arrays
+    image_list = [np.array(img) for img in image_list]
+    
+    # Get dimensions of the images
+    height, width, layers = image_list[0].shape
+    
+    # Define the codec and create VideoWriter object
+    video_path = os.path.join(output_dir, f"{file_name}.mp4")
+    video_writer = cv2.VideoWriter(video_path, cv2.VideoWriter_fourcc(*'mp4v'), 30, (width, height))
+    
+    for img in image_list:
+        # Convert RGB to BGR for OpenCV
+        video_writer.write(cv2.cvtColor(img, cv2.COLOR_RGB2BGR))
+    
+    video_writer.release()
+    print(f"Video saved at {video_path}")
+
+# Example usage:
+# save_images_to_video(image_list, output_dir="render_result", file_name="animation")
 
 
 def set_pose_data(pose_dict):
@@ -416,109 +461,9 @@ def save_pose_into_videos(pose_dict, output_dir="file", file_name="output_video"
 
 
 def __drawFunc(frame_index = 0, image_list = []):
-    # glClearColor(173.0/255, 216.0/255, 230.0/255, 0.0)
-    glClearDepth(1.0)
-    glPointSize(5)
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
-    glDisable(GL_DEPTH_TEST)
 
-    current_frame = glutGet(GLUT_ELAPSED_TIME)
+    drawFunc()
 
-    # glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-
-    view = camera.get_view_matrix()
-
-    # Extract the rotation matrix (upper-left 3x3)
-    R = glm.mat3(view)
-
-    # Extract the translation vector (last column)
-    T = glm.vec3(view[3])
-
-    # Calculate the camera position in world space
-    viewPos =  glm.vec3(-glm.transpose(R) * T)
-
-
-    shader_program.use()
-    shader_program.set_matrix("projection", glm.value_ptr(projection))
-    shader_program.set_matrix("view", glm.value_ptr(view))
-
-    m = glm.mat4(1.0)
-    m = glm.translate(m, grid_position[2])
-    m = glm.rotate(m, glm.radians(0), grid_position[1][1])
-    m = glm.scale(m, glm.vec3(5))
-    shader_program.set_matrix("model", glm.value_ptr(m))
-    # floor_color = glm.vec3(1.0, 1.0, 1.0)
-
-
-    # glUniform3fv(glGetUniformLocation(shader_program.id, "fragColor"), 1, glm.value_ptr(floor_color))
-    # draw_background()
-    # background_texture = load_texture("background.png")
-
-    floor_model.draw(shader_program, draw_type=GL_TRIANGLES)
-    # shader_program.un_use()
-    # shader_program.use()
-    # grid_color = glm.vec3(0.0, 0.2, 0.3)
-    # glUniform3fv(glGetUniformLocation(shader_program.id, "fragColor"), 1, glm.value_ptr(grid_color))
-    # glPolygonMode(GL_FRONT_AND_BACK, GL_LINE)
-    # grid_model.draw(shader_program, draw_type=GL_LINES)
-    # glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
-    shader_program.un_use()
-    glEnable(GL_DEPTH_TEST)
-
-    robot_program.use()
-    robot_program.set_matrix("projection", glm.value_ptr(projection))
-    # Pass view_position (vec3) to the shader instead of the entire matrix
-    glUniform3fv(glGetUniformLocation(robot_program.id, "viewPos"), 1, glm.value_ptr(viewPos))
-
-    glUniform1i(glGetUniformLocation(robot_program.id, "use_bumpmap"), human_model.use_bumpmap)
-
-    glUniform3fv(glGetUniformLocation(robot_program.id, "lightPos"), 1, light_pos)
-    glUniformMatrix4fv(glGetUniformLocation(robot_program.id, "view"), 1, GL_FALSE, glm.value_ptr(view))
-
-
-
-
-    m = glm.mat4(1.0)
-    # m = glm.rotate(m, glm.radians(-90), glm.vec3(1, 0, 0))
-    robot_program.set_matrix("model", glm.value_ptr(m))
-    if "Humano" in human_model.armature_keywords:
-        view = glm.lookAt(glm.vec3(0.0, -3.0, 3.0), glm.vec3(0.0, 1.0, 0.0), glm.vec3(0.0, 1.0, 0.0))
-        light_pos = np.array([0, -100.0, 200.0], dtype=np.float32)
-        glUniformMatrix4fv(glGetUniformLocation(robot_program.id, "view"), 1, GL_FALSE, glm.value_ptr(view))
-    else:
-        light_pos = np.array([0, 100.0, 200.0], dtype=np.float32)
-
-    # # Define the light properties
-    # light_direction = np.array([0.0, -1.0, -1.0], dtype=np.float32)  # Direction of light
-    # light_ambient = np.array([0.1, 0.1, 0.1], dtype=np.float32)  # Ambient intensity
-    # light_diffuse = np.array([0.8, 0.8, 0.8], dtype=np.float32)  # Diffuse intensity
-    # light_specular = np.array([1.0, 1.0, 1.0], dtype=np.float32)  # Specular intensity
-    #
-    # # Set uniforms
-    # glUniform3fv(glGetUniformLocation(shader_program, "lightDirection"), 1, light_direction)
-    # glUniform3fv(glGetUniformLocation(shader_program, "lightAmbient"), 1, light_ambient)
-    # glUniform3fv(glGetUniformLocation(shader_program, "lightDiffuse"), 1, light_diffuse)
-    # glUniform3fv(glGetUniformLocation(shader_program, "lightSpecular"), 1, light_specular)
-
-    robot_program.un_use()
-
-    human_model.play_animation(robot_program, frame_index)
-
-    #
-    global last_frame
-    last_frame = glutGet(GLUT_ELAPSED_TIME)
-    global delta_time
-    delta_time = (last_frame - current_frame)
-    camera.process_keyboard(delta_time / 1000)
-    if delta_time < 16:
-        time.sleep((16 - delta_time) / 1000)
-    calculate_FPS()
-    global fps_count
-    if fps_count == 100:
-        fps_count = 0
-        print('fps: %.2f' % _fps)
-    fps_count += 1
-    glutSwapBuffers()
 
     pixels = glReadPixels(0, 0, SCR_WIDTH, SCR_HEIGHT, GL_RGB, GL_UNSIGNED_BYTE)
     image = np.frombuffer(pixels, dtype=np.uint8).reshape(SCR_HEIGHT, SCR_WIDTH, 3)
